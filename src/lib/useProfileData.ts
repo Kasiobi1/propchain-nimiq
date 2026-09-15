@@ -209,7 +209,7 @@ export function useProfileData() {
             status: statusLabel,
             expiry: Number(expiry),
             isSellerCounter,
-            counterparty: (buyer.toLowerCase() === address.toLowerCase() ? seller : buyer) ?? "0x0",
+            counterparty: ((buyer.toLowerCase() === address.toLowerCase() ? seller : buyer) ?? "0x0") as `0x${string}`,
           };
 
           if (buyer.toLowerCase() === address.toLowerCase()) {
