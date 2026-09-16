@@ -3,7 +3,7 @@ import { isAddress } from "viem";
 import { signVerificationToken } from "@/lib/verificationToken";
 
 // Real verification pipeline, per spec section 6.4.1:
-//   Stage 1 (Groq, qwen/qwen3.6-27b — current Groq vision model as of Aug
+//   Stage 1 (Groq, meta-llama/llama-4-scout-17b-16e-instruct — current Groq vision model as of Aug
 //     2026): fast OCR/text extraction from the uploaded document image,
 //     plus a name/address consistency check against what the seller typed.
 //   Stage 2 (Groq, openai/gpt-oss-120b): the harder judgment call — does
@@ -125,7 +125,7 @@ Respond ONLY with valid JSON — no markdown fences, no <think> tags, no reasoni
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "qwen/qwen3.6-27b",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages: [
         {
           role: "user",
@@ -268,7 +268,7 @@ interface LivenessResult {
  * specialized models trained specifically to detect spoofing signals —
  * unnatural skin texture, screen glare/moire patterns from photographing a
  * photo, lack of micro-movements in video, etc. A general vision-language
- * model like Groq's qwen3.6-27b was NOT trained for this and cannot
+ * model like Groq's llama-4-scout-17b-16e-instruct was NOT trained for this and cannot
  * reliably tell a live selfie apart from a photo of a photo, a printed
  * mask, or a well-lit screen replay. This function only does two much
  * weaker things: (1) a basic "do these two faces look like the same
@@ -309,7 +309,7 @@ Respond ONLY with valid JSON — no markdown fences, no <think> tags, no reasoni
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "qwen/qwen3.6-27b",
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages: [
         {
           role: "user",
