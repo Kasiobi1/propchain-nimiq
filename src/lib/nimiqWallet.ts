@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPublicClient, createWalletClient, custom, type Abi, type Address } from "viem";
-import { baseSepolia, base } from "viem/chains";
-import { ACTIVE_CHAIN_ID, BASE_MAINNET_CHAIN_ID } from "./contracts";
+import { baseSepolia, base, sepolia } from "viem/chains";
+import { ACTIVE_CHAIN_ID, BASE_MAINNET_CHAIN_ID, BASE_SEPOLIA_CHAIN_ID } from "./contracts";
 
 // Replaces wagmi + RainbowKit. Inside a Nimiq Pay Mini App, the wallet is
 // not something the user "connects" by picking from a modal — Nimiq Pay
@@ -21,7 +21,12 @@ import { ACTIVE_CHAIN_ID, BASE_MAINNET_CHAIN_ID } from "./contracts";
 // code doesn't care which one injected it, same as the real Nimiq Pay
 // WebView.
 
-const ACTIVE_CHAIN = ACTIVE_CHAIN_ID === BASE_MAINNET_CHAIN_ID ? base : baseSepolia;
+const ACTIVE_CHAIN =
+  ACTIVE_CHAIN_ID === BASE_MAINNET_CHAIN_ID
+    ? base
+    : ACTIVE_CHAIN_ID === BASE_SEPOLIA_CHAIN_ID
+      ? baseSepolia
+      : sepolia;
 
 // Hex chain ID + params used for wallet_addEthereumChain / switchEthereumChain
 // — Nimiq Pay's provider supports both per its Ethereum Provider API, so a

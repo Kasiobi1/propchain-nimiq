@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createWalletClient, createPublicClient, http, keccak256, toBytes, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { ASSET_NFT_ABI, ASSET_TYPE_ENUM, ASSET_MINTED_EVENT_SIGNATURE } from "@/lib/assetNftAbi";
 import { encodeMetadataDataUri } from "@/lib/assetMetadata";
@@ -23,7 +23,7 @@ import { verifyVerificationToken } from "@/lib/verificationToken";
 // no longer gets to assert its own verdict at all.
 
 const VERIFIER_PRIVATE_KEY = process.env.VERIFIER_PRIVATE_KEY as `0x${string}` | undefined;
-const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org"; // Nimiq Pay migration: was X Layer testnet's RPC — see propchain-contracts/README.md
+const RPC_URL = process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"; // Nimiq Pay migration: Base Sepolia isn't a Nimiq Pay-supported testnet, redeployed to Ethereum Sepolia — see propchain-contracts/README.md
 
 interface MintListingBody {
   toAddress: string;
@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
     const account = privateKeyToAccount(VERIFIER_PRIVATE_KEY);
     const transport = http(RPC_URL);
 
-    const walletClient = createWalletClient({ account, chain: baseSepolia, transport });
-    const publicClient = createPublicClient({ chain: baseSepolia, transport });
+    const walletClient = createWalletClient({ account, chain: sepolia, transport });
+    const publicClient = createPublicClient({ chain: sepolia, transport });
 
     // docHash needs to be unique per submission — hashing the seller's
     // stated name + description + a timestamp, same pattern as the admin

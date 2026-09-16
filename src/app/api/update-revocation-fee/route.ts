@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createWalletClient, createPublicClient, http, parseEther, formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { ESCROW_HOLD_ABI } from "@/lib/escrowHoldAbi";
 
@@ -30,7 +30,7 @@ import { ESCROW_HOLD_ABI } from "@/lib/escrowHoldAbi";
 // project.
 
 const VERIFIER_PRIVATE_KEY = process.env.VERIFIER_PRIVATE_KEY as `0x${string}` | undefined;
-const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org"; // Nimiq Pay migration: was X Layer testnet's RPC
+const RPC_URL = process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"; // Nimiq Pay migration: Base Sepolia isn't a Nimiq Pay-supported testnet, redeployed to Ethereum Sepolia
 const TARGET_USD_FEE = 0.15; // midpoint of spec's $0.10–$0.20 range
 const DRIFT_THRESHOLD_PERCENT = 10; // only update on-chain if drift exceeds this, to avoid spamming gas for tiny fluctuations
 
@@ -60,8 +60,8 @@ export async function POST() {
 
     const account = privateKeyToAccount(VERIFIER_PRIVATE_KEY);
     const transport = http(RPC_URL);
-    const publicClient = createPublicClient({ chain: baseSepolia, transport });
-    const walletClient = createWalletClient({ account, chain: baseSepolia, transport });
+    const publicClient = createPublicClient({ chain: sepolia, transport });
+    const walletClient = createWalletClient({ account, chain: sepolia, transport });
 
     const currentFeeWei = (await publicClient.readContract({
       address: CONTRACT_ADDRESSES.escrowHold,
