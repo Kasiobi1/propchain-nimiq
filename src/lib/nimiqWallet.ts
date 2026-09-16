@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createPublicClient, createWalletClient, custom, type Abi, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, http, type Abi, type Address } from "viem";
 import { baseSepolia, base, sepolia } from "viem/chains";
 import { ACTIVE_CHAIN_ID, BASE_MAINNET_CHAIN_ID, BASE_SEPOLIA_CHAIN_ID } from "./contracts";
 
@@ -56,18 +56,21 @@ function getProvider(): EthereumProvider | null {
 }
 
 /**
- * A public client for read-only calls, backed by whatever provider is
- * injected (Nimiq Pay in production, any EIP-1193 wallet during local
- * dev). Falls back to nothing usable if no provider exists — callers
- * should guard with useNimiqWallet()'s `connected` state, same as every
- * hook below already checks tokenId/enabled conditions.
+ * A public client for read-only calls. Uses a direct HTTP transport to our
+ * own configured RPC rather than routing reads through the connected
+ * wallet's injected provider — Nimiq Pay's own Sepolia RPC infrastructure
+ * has shown real inconsistencies in testing (pruned state on some calls,
+ * "no code at latest block" on others, for a contract that is genuinely
+ * deployed and confirmed on-chain via a direct Alchemy query). Writes
+ * still have to go through the wallet provider (see getWalletClient)
+ * since only the wallet can sign, but reads don't need to.
  */
 export function getPublicClient() {
-  const provider = getProvider();
-  if (!provider) return null;
   return createPublicClient({
     chain: ACTIVE_CHAIN,
-    transport: custom(provider),
+    transport: http(
+      process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"
+    ),
   });
 }
 
