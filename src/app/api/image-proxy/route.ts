@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Real fix for a real bug found via testing: pasting an ipfs.ninja gateway
-// URL directly into a browser tab loads fine, but the exact same URL used
-// as an <img src> embedded on this site renders blank — a referrer/origin
-// restriction on the gateway (ipfs.ninja's dashboard lists "IP/origin
-// restrictions" as a dedicated-gateway feature), not a data or URL-format
-// problem. Confirmed separately: Node's server-to-server fetch (no browser
-// referrer) gets a clean 200 for the same CID that fails when embedded.
-//
-// This route re-fetches the image server-side (also no browser referrer,
-// same as the successful Node test) and streams it back, so the browser
-// only ever talks to our own origin — the actual gateway request happens
-// server-to-server, invisible to whatever origin check the gateway runs.
+// This route re-fetches IPFS images server-side and streams them back to
+// the browser. Keeping a strict gateway allowlist prevents this endpoint
+// from becoming an arbitrary URL proxy.
 //
 // ALLOWED_HOSTS is a strict allowlist, not a general-purpose proxy — this
 // only ever fetches from the same IPFS gateways AssetThumbnail already
 // tries directly (src/components/AssetThumbnail.tsx), so it can't be used
 // to fetch arbitrary attacker-supplied URLs.
-const ALLOWED_HOSTS = ["ipfs.ninja", "ipfs.io", "ipfs.4everland.io", "dweb.link"];
+const ALLOWED_HOSTS = ["ipfs.io", "ipfs.4everland.io", "dweb.link"];
 
 export async function GET(req: NextRequest) {
   const target = req.nextUrl.searchParams.get("url");
