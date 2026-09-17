@@ -742,6 +742,7 @@ export default function ListAssetPage() {
                       ? `Minting unit ${Math.min(mintProgress.done + 1, mintProgress.total)} of ${mintProgress.total}…`
                       : "Minting your asset…"}
                   </p>
+                  {imageUploadError && <p className="mt-2 text-xs text-clay">{imageUploadError}</p>}
                 </div>
               )}
 
@@ -750,6 +751,9 @@ export default function ListAssetPage() {
                   <div className="rounded-xl border border-sage/30 bg-sage/5 p-4 text-sm text-sage">
                     Minted — token{mintedTokenIds.length > 1 ? "s" : ""} #
                     {mintedTokenIds.map((id) => id.toString()).join(", #")}
+                    {imageUploadError && (
+                      <p className="mt-2 text-clay">{imageUploadError}</p>
+                    )}
                   </div>
                 )}
 
