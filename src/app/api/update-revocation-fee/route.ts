@@ -29,7 +29,17 @@ import { ESCROW_HOLD_ABI } from "@/lib/escrowHoldAbi";
 // here — matches the hackathon-stage tradeoffs flagged elsewhere in this
 // project.
 
-const VERIFIER_PRIVATE_KEY = process.env.VERIFIER_PRIVATE_KEY as `0x${string}` | undefined;
+// See mint-listing/route.ts for why this is normalized rather than a bare
+// env var cast — tolerant of missing 0x prefix / stray whitespace.
+function normalizePrivateKey(raw: string | undefined): `0x${string}` | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const withPrefix = trimmed.startsWith("0x") || trimmed.startsWith("0X") ? trimmed : `0x${trimmed}`;
+  return withPrefix as `0x${string}`;
+}
+
+const VERIFIER_PRIVATE_KEY = normalizePrivateKey(process.env.VERIFIER_PRIVATE_KEY);
 const RPC_URL = process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"; // Nimiq Pay migration: Base Sepolia isn't a Nimiq Pay-supported testnet, redeployed to Ethereum Sepolia
 const TARGET_USD_FEE = 0.15; // midpoint of spec's $0.10–$0.20 range
 const DRIFT_THRESHOLD_PERCENT = 10; // only update on-chain if drift exceeds this, to avoid spamming gas for tiny fluctuations

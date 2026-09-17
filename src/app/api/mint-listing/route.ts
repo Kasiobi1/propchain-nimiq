@@ -22,7 +22,19 @@ import { verifyVerificationToken } from "@/lib/verificationToken";
 // verifyVerificationToken() — see src/lib/verificationToken.ts. The client
 // no longer gets to assert its own verdict at all.
 
-const VERIFIER_PRIVATE_KEY = process.env.VERIFIER_PRIVATE_KEY as `0x${string}` | undefined;
+// Normalized so it's tolerant of how the value was pasted into the host's
+// env var UI — trims whitespace and adds the 0x prefix if it's missing,
+// since private keys are commonly copied without it (e.g. straight from a
+// wallet export) and viem's privateKeyToAccount() requires it.
+function normalizePrivateKey(raw: string | undefined): `0x${string}` | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const withPrefix = trimmed.startsWith("0x") || trimmed.startsWith("0X") ? trimmed : `0x${trimmed}`;
+  return withPrefix as `0x${string}`;
+}
+
+const VERIFIER_PRIVATE_KEY = normalizePrivateKey(process.env.VERIFIER_PRIVATE_KEY);
 const RPC_URL = process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com"; // Nimiq Pay migration: Base Sepolia isn't a Nimiq Pay-supported testnet, redeployed to Ethereum Sepolia — see propchain-contracts/README.md
 
 interface MintListingBody {
