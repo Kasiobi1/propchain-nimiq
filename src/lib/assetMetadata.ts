@@ -5,7 +5,7 @@
  * and the metadata is fully retrievable by any client that resolves
  * tokenURI(), same as a real IPFS gateway would provide.
  *
- * Real photos are stored on IPFS through Pinata (see
+ * Real photos DO now have real storage — via ipfs.ninja (see
  * /api/upload-image/route.ts) — the image itself gets uploaded there, and
  * only the resulting IPFS URL is embedded here as `imageUrl`, which keeps
  * the on-chain data: URI small and cheap regardless of photo size.
@@ -58,7 +58,7 @@ export function decodeMetadataDataUri(uri: string): AssetMetadata | null {
 // Normalizes an image URL for browser display. The real bug behind
 // "some real listings show blank image areas": /api/upload-image's
 // fallback (`data.url ?? gateway-fallback`) trusts whatever `url` field
-// several IPFS pinning
+// ipfs.ninja's response happens to include, and several IPFS pinning
 // services return that as an `ipfs://<cid>` URI rather than an https
 // gateway link. `ipfs://` is not a scheme browsers know how to fetch —
 // an <img src="ipfs://..."> just renders blank, no error surfaced. This
@@ -74,10 +74,13 @@ export function normalizeImageUrl(url: string): string {
     // Some tools double up as ipfs://ipfs/<cid> — strip either form down
     // to the bare path (cid, optionally with a /filename suffix).
     const path = trimmed.replace(/^ipfs:\/\/(ipfs\/)?/i, "");
-    // Use a public IPFS gateway for browser display. The CID itself is the
-    // durable reference; the gateway can be changed later without changing
-    // the NFT metadata.
-    return `https://ipfs.io/ipfs/${path}`;
+    // ipfs.ninja's own gateway, not the public ipfs.io one — every image
+    // this project uploads is pinned there (see /api/upload-image), and a
+    // dedicated gateway tied to the account doesn't share ipfs.io's
+    // anonymous-traffic rate limiting (confirmed via a real 429 during
+    // testing). AssetThumbnail additionally retries public gateways if
+    // this one ever fails, so this is a preference, not a hard dependency.
+    return `https://ipfs.ninja/ipfs/${path}`;
   }
   return trimmed;
 }

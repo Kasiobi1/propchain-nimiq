@@ -3,7 +3,7 @@ import { isAddress } from "viem";
 import { signVerificationToken } from "@/lib/verificationToken";
 
 // Real verification pipeline, per spec section 6.4.1:
-//   Stage 1 (Groq, Qwen/Qwen3.8-27B — current Groq vision model as of Sep
+//   Stage 1 (Groq, Qwen/Qwen3.8-27B — current Groq vision model as of Aug
 //     2026): fast OCR/text extraction from the uploaded document image,
 //     plus a name/address consistency check against what the seller typed.
 //   Stage 2 (Groq, openai/gpt-oss-120b): the harder judgment call — does
@@ -173,49 +173,6 @@ export interface StructuredVerdict {
     anomalyDetection: CheckResult;
   };
   summary: string;
-}
-
-// Auto-approval threshold applied AFTER the model responds, on top of its
-// own checks — NOT a model-reported confidence score. The model is never
-// asked for a percentage (see the prompt's explicit "do not invent a
-// numeric confidence score" instruction) because LLMs aren't reliably
-// calibrated at producing one; a stated "85% confident" isn't necessarily
-// more trustworthy than "60% confident" from the same model. This
-// threshold instead counts the four real pass/fail/warning checks the
-// model already commits to per-category, which is a countable, inspectable
-// number rather than an invented one.
-//
-// Rule: if the model's own verdict is "review" (not "approve" or
-// "reject" — those are left untouched), AND zero checks are "fail", AND
-// at least MIN_PASS_RATIO of the four checks are "pass", promote it to
-// "approve". A single "warning" (e.g. a plausible-but-unverifiable detail
-// flagged as an anomaly) with three clean passes clears this; two or more
-// warnings, or any outright "fail", does not.
-//
-// SECURITY TRADEOFF, stated plainly: this loosens what gets minted as a
-// verified NFT. A borderline document that used to require human review
-// now gets waved through automatically if 3-of-4 categories pass. That's
-// an intentional tradeoff for demo/hackathon reliability, not a
-// production-grade safety bar — revisit before any real-money usage.
-const MIN_PASS_RATIO = 0.75; // 3 of 4 checks must be "pass"
-
-function applyAutoApprovalThreshold(verdict: StructuredVerdict): StructuredVerdict {
-  if (verdict.status !== "review") return verdict;
-
-  const checks = Object.values(verdict.checks);
-  const hasFailure = checks.some((c) => c.status === "fail");
-  const passCount = checks.filter((c) => c.status === "pass").length;
-  const passRatio = passCount / checks.length;
-
-  if (!hasFailure && passRatio >= MIN_PASS_RATIO) {
-    return {
-      ...verdict,
-      status: "approve",
-      summary: `${verdict.summary} (Auto-approved: ${passCount}/${checks.length} checks passed with no failures.)`,
-    };
-  }
-
-  return verdict;
 }
 
 async function runVerdict(
@@ -405,13 +362,12 @@ export async function POST(req: NextRequest) {
     }
 
     const extraction = await runGroqExtraction(body.documentImageBase64, body.sellerStatedName);
-    const rawVerdict = await runVerdict(
+    const verdict = await runVerdict(
       extraction,
       body.sellerStatedName,
       body.assetType ?? "Other",
       body.assetDescription ?? ""
     );
-    const verdict = applyAutoApprovalThreshold(rawVerdict);
 
     let liveness: LivenessResult | null = null;
     if (body.selfieImageBase64) {

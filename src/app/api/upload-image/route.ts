@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeImageUrl } from "@/lib/assetMetadata";
 
-// Uploads seller photos to IPFS through Pinata.
-// The Pinata JWT stays server-side. The browser sends the image data to this
-// route, and this route handles the actual IPFS upload.
+// Uploads a real image to IPFS via Pinata, so listings can have a real
+// photo instead of just the illustrated placeholder thumbnails. The JWT
+// stays server-side — the browser sends image data to this route, this
+// route sends it on to Pinata.
 //
-// Pinata's current Files API accepts multipart/form-data at:
+// REPLACES the previous ipfs.ninja integration: ipfs.ninja shut down
+// entirely (confirmed via a live 402 response — "IPFS.NINJA is winding
+// down. New uploads have been disabled") and every photo upload had been
+// silently failing as a result. Pinata was picked as the replacement
+// since it's one of the most established, still-actively-run IPFS
+// pinning services with a genuine free tier (1GB) as of Sep 2026.
+//
+// Built against Pinata's documented v3 Files API (docs.pinata.cloud):
 //   POST https://uploads.pinata.cloud/v3/files
-// with the file in the `file` form field and `Authorization: Bearer <JWT>`.
-// The returned CID is converted to a public IPFS gateway URL for display.
+//   Headers: Authorization: Bearer <PINATA_JWT>
+//   Body: multipart/form-data, field "file" (a File/Blob), field
+//     "network" = "public"
+//   Response: { data: { cid, id, ... } } — no gateway URL is returned
+//   directly, so the URL is constructed from Pinata's shared public
+//   gateway (gateway.pinata.cloud) rather than a dedicated gateway
+//   domain, since this account's dedicated domain isn't known here.
+// NOTE: not independently verified against a live Pinata account the
+// way the ipfs.ninja bug fix below was — if PINATA_JWT lacks the
+// files:write scope, or if the "network" field turns out to be handled
+// differently than assumed, the error message returned here should at
+// least surface the real cause rather than failing silently.
 
 const PINATA_JWT = process.env.PINATA_JWT;
 
@@ -22,51 +40,30 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { imageBase64, fileName, mimeType } = body as {
-      imageBase64?: string;
-      fileName?: string;
-      mimeType?: string;
-    };
+    const { imageBase64 } = body as { imageBase64?: string };
 
     if (!imageBase64) {
-      return NextResponse.json(
-        { error: "imageBase64 is required." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "imageBase64 is required." }, { status: 400 });
     }
 
-    // The frontend currently sends FileReader.readAsDataURL() output.
-    // Strip the data URI prefix before decoding the binary image.
-    const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/s);
-    const detectedMimeType = matches?.[1] || mimeType || "image/jpeg";
-    const rawBase64 = matches?.[2] || imageBase64;
+    // Split the data: URI prefix (if present) to get the raw base64 and
+    // the mime type, since Pinata's multipart upload needs an actual
+    // File/Blob, not a base64 string directly.
+    const match = imageBase64.match(/^data:(.+);base64,(.*)$/);
+    const mimeType = match?.[1] ?? "image/jpeg";
+    const rawBase64 = match?.[2] ?? imageBase64;
+    const bytes = Buffer.from(rawBase64, "base64");
 
-    const buffer = Buffer.from(rawBase64, "base64");
-    if (!buffer.length) {
-      return NextResponse.json(
-        { error: "The supplied image data is empty or invalid." },
-        { status: 400 }
-      );
-    }
-
-    // Avoid trusting arbitrary path information from the browser.
-    const safeFileName = (fileName || `propchain-${Date.now()}.jpg`)
-      .replace(/[^a-zA-Z0-9._-]/g, "-")
-      .slice(0, 120);
-
-    const file = new File([buffer], safeFileName, {
-      type: detectedMimeType,
-    });
-
-    const form = new FormData();
-    form.append("file", file);
+    const formData = new FormData();
+    formData.append("file", new Blob([bytes], { type: mimeType }), "listing-photo");
+    formData.append("network", "public");
 
     const response = await fetch("https://uploads.pinata.cloud/v3/files", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${PINATA_JWT}`,
       },
-      body: form,
+      body: formData,
     });
 
     if (!response.ok) {
@@ -75,17 +72,14 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    const cid = data?.data?.cid ?? data?.cid;
-
-    if (!cid || typeof cid !== "string") {
+    const cid = data?.data?.cid;
+    if (!cid) {
       throw new Error(`Unexpected Pinata response shape: ${JSON.stringify(data)}`);
     }
 
-    const url = normalizeImageUrl(`ipfs://${cid}`);
-
     return NextResponse.json({
       cid,
-      url,
+      url: normalizeImageUrl(`https://gateway.pinata.cloud/ipfs/${cid}`),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Image upload failed.";
