@@ -257,7 +257,8 @@ export default function ListAssetPage() {
     // so this happens once and the same URLs get reused for each mint call
     // below rather than re-uploading per unit.
     const imageUrls: string[] = [];
-    for (const preview of productPhotoPreviews) {
+    setImageUploadError(null);
+    for (const [i, preview] of productPhotoPreviews.entries()) {
       try {
         const uploadRes = await fetch("/api/upload-image", {
           method: "POST",
@@ -267,9 +268,17 @@ export default function ListAssetPage() {
         const uploadData = await uploadRes.json();
         if (uploadRes.ok) {
           imageUrls.push(uploadData.url as string);
+        } else {
+          setImageUploadError(
+            `Photo ${i + 1} of ${productPhotoPreviews.length} failed to upload: ${uploadData.error ?? "unknown error"} — continuing without it.`
+          );
         }
-      } catch {
-        // Non-fatal — continue with whatever photos succeeded.
+      } catch (err) {
+        setImageUploadError(
+          `Photo ${i + 1} of ${productPhotoPreviews.length} failed to upload: ${
+            err instanceof Error ? err.message : "network error"
+          } — continuing without it.`
+        );
       }
     }
 
