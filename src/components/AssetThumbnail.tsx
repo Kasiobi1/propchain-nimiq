@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AssetType } from "@/lib/mockListings";
+import { IPFS_GATEWAY_HOSTS } from "@/lib/assetMetadata";
 
 interface AssetThumbnailProps {
   assetType: AssetType;
@@ -9,27 +10,50 @@ interface AssetThumbnailProps {
   imageUrl?: string; // real IPFS photo URL — takes priority over the illustration if present
 }
 
-// ipfs.ninja's own gateway comes first — dedicated to this project's
-// account, so it isn't subject to the anonymous-traffic rate limiting a
-// public gateway like ipfs.io has (confirmed via a real 429 during
-// testing). The rest are public-network fallbacks in case ipfs.ninja's
-// gateway itself has an outage. Same underlying content either way —
-// these are just different doors into the same IPFS network.
-const IPFS_GATEWAY_HOSTS = ["ipfs.ninja", "ipfs.io", "ipfs.4everland.io", "dweb.link"];
+const proxied = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
 
+/**
+ * Builds the ordered list of URLs to try for one photo.
+ *
+ * THE BUG THIS FIXES: this function used to pull the CID out of the
+ * uploaded URL and then throw the host away, rebuilding the request
+ * against a hardcoded list that led with ipfs.ninja. After the upload
+ * side moved to Pinata, that meant every photo — freshly uploaded and
+ * correctly pinned — was requested from a gateway that no longer exists,
+ * then from public gateways that don't have the bytes and hang or 429
+ * rather than failing fast. Net effect in the UI: a permanently blank
+ * image area, with no error, on listings whose photo uploaded fine.
+ *
+ * The host the image was actually uploaded to is now tried first, both
+ * directly and proxied, before falling back to public gateways.
+ */
 function getGatewayVariants(url: string): string[] {
-  const match = url.match(/^https:\/\/[^/]+\/ipfs\/(.+)$/);
+  const match = url.match(/^https:\/\/([^/]+)\/ipfs\/(.+)$/);
   if (!match) return [url]; // not a recognized IPFS gateway URL — use as-is, unproxied
-  const path = match[1];
-  // Routed through /api/image-proxy rather than requested directly: a real
-  // bug found via testing showed ipfs.ninja's gateway serves a URL fine
-  // when opened directly but blank when embedded as an <img> on this site
-  // (a referrer/origin restriction, not a data problem) — proxying through
-  // our own server means the actual gateway request happens server-to-
-  // server, with no browser referrer for the gateway to restrict on.
-  return IPFS_GATEWAY_HOSTS.map(
-    (host) => `/api/image-proxy?url=${encodeURIComponent(`https://${host}/ipfs/${path}`)}`
-  );
+
+  const [, originHost, path] = match;
+
+  const variants = [
+    // 1. Straight at the gateway the image is actually pinned on. Pinata
+    //    dedicated gateways serve their own account's content without
+    //    hotlink restrictions, so this normally succeeds outright and
+    //    skips a round trip through our own server.
+    url,
+    // 2. Same gateway, but server-side. Kept because a prior gateway
+    //    (ipfs.ninja) was found to serve a URL fine when opened directly
+    //    yet blank when embedded as an <img> here — a referrer/origin
+    //    restriction, not a data problem. Proxying means the gateway
+    //    request happens server-to-server, with no browser referrer to
+    //    restrict on. Cheap insurance if Pinata's settings ever change.
+    proxied(url),
+    // 3. Public-network fallbacks, in case Pinata itself is down. Only
+    //    useful if the CID has propagated beyond Pinata's own nodes.
+    ...IPFS_GATEWAY_HOSTS.filter((host) => host !== originHost).map((host) =>
+      proxied(`https://${host}/ipfs/${path}`)
+    ),
+  ];
+
+  return variants;
 }
 
 // Subtle dark-surface shades so thumbnails sit flush with the surrounding

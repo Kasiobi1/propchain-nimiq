@@ -5,11 +5,37 @@
  * and the metadata is fully retrievable by any client that resolves
  * tokenURI(), same as a real IPFS gateway would provide.
  *
- * Real photos DO now have real storage — via ipfs.ninja (see
+ * Real photos DO now have real storage — via Pinata (see
  * /api/upload-image/route.ts) — the image itself gets uploaded there, and
  * only the resulting IPFS URL is embedded here as `imageUrl`, which keeps
  * the on-chain data: URI small and cheap regardless of photo size.
  */
+// Single source of truth for the IPFS gateway config, imported by both
+// the client display layer (AssetThumbnail) and the server proxy
+// (/api/image-proxy). Previously these lists were duplicated in three
+// places and all three still named ipfs.ninja, which is why photos went
+// on rendering blank after the upload side was migrated to Pinata: the
+// upload succeeded and stored a working mypinata.cloud URL, then the
+// display layer threw that host away and re-requested the CID from a
+// gateway that no longer exists.
+//
+// This is the account's *dedicated* Pinata gateway. The shared
+// gateway.pinata.cloud 404s on freshly-pinned content, so the dedicated
+// domain is the only one that reliably serves this account's uploads.
+export const PINATA_GATEWAY_HOST = "plum-decisive-horse-820.mypinata.cloud";
+
+// Ordered by likelihood of success: the account's own dedicated gateway
+// first (content is pinned there, so it's always a hit and isn't subject
+// to public-gateway rate limiting), then public gateways as a fallback
+// in case Pinata itself has an outage. ipfs.ninja was removed — it's
+// shut down, so leaving it in only wasted a retry attempt per image.
+export const IPFS_GATEWAY_HOSTS = [
+  PINATA_GATEWAY_HOST,
+  "ipfs.io",
+  "dweb.link",
+  "ipfs.4everland.io",
+];
+
 export interface AssetMetadata {
   name: string;
   description: string;
@@ -55,12 +81,9 @@ export function decodeMetadataDataUri(uri: string): AssetMetadata | null {
   }
 }
 
-// Normalizes an image URL for browser display. The real bug behind
-// "some real listings show blank image areas": /api/upload-image's
-// fallback (`data.url ?? gateway-fallback`) trusts whatever `url` field
-// ipfs.ninja's response happens to include, and several IPFS pinning
-// services return that as an `ipfs://<cid>` URI rather than an https
-// gateway link. `ipfs://` is not a scheme browsers know how to fetch —
+// Normalizes an image URL for browser display. Some IPFS pinning
+// services hand back an `ipfs://<cid>` URI rather than an https gateway
+// link. `ipfs://` is not a scheme browsers know how to fetch —
 // an <img src="ipfs://..."> just renders blank, no error surfaced. This
 // strips that scheme and rewrites to a public gateway URL. Already-https
 // URLs pass through untouched. Applied both at upload time (so new
@@ -70,18 +93,28 @@ export function decodeMetadataDataUri(uri: string): AssetMetadata | null {
 // the fact).
 export function normalizeImageUrl(url: string): string {
   const trimmed = url.trim();
+
   if (/^ipfs:\/\//i.test(trimmed)) {
     // Some tools double up as ipfs://ipfs/<cid> — strip either form down
     // to the bare path (cid, optionally with a /filename suffix).
     const path = trimmed.replace(/^ipfs:\/\/(ipfs\/)?/i, "");
-    // ipfs.ninja's own gateway, not the public ipfs.io one — every image
-    // this project uploads is pinned there (see /api/upload-image), and a
-    // dedicated gateway tied to the account doesn't share ipfs.io's
-    // anonymous-traffic rate limiting (confirmed via a real 429 during
-    // testing). AssetThumbnail additionally retries public gateways if
-    // this one ever fails, so this is a preference, not a hard dependency.
-    return `https://ipfs.ninja/ipfs/${path}`;
+    return `https://${PINATA_GATEWAY_HOST}/ipfs/${path}`;
   }
+
+  // ipfs.ninja shut down entirely, so any URL still pointing at its
+  // gateway is a guaranteed dead request. Tokens minted before the
+  // Pinata migration have those URLs baked into their on-chain metadata
+  // and can't be edited after the fact — rewriting the host here at read
+  // time at least sends the request somewhere that's alive. (Whether the
+  // CID itself still resolves depends on whether anything else on the
+  // IPFS network still has those bytes; for content only ever pinned on
+  // ipfs.ninja, it won't. That's unfixable — this just stops the dead
+  // host from burning a retry slot.)
+  const deadGateway = trimmed.match(/^https:\/\/ipfs\.ninja\/ipfs\/(.+)$/i);
+  if (deadGateway) {
+    return `https://${PINATA_GATEWAY_HOST}/ipfs/${deadGateway[1]}`;
+  }
+
   return trimmed;
 }
 
