@@ -79,7 +79,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       cid,
-      url: normalizeImageUrl(`https://gateway.pinata.cloud/ipfs/${cid}`),
+      // The generic shared gateway.pinata.cloud 404s on freshly-pinned
+      // content (confirmed via a live curl -I against a real upload) —
+      // Pinata's dedicated per-account gateway is the one that actually
+      // works, since it's restricted-by-default to serve only this
+      // account's own pinned CIDs directly, no propagation delay.
+      url: normalizeImageUrl(`https://plum-decisive-horse-820.mypinata.cloud/ipfs/${cid}`),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Image upload failed.";
