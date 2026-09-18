@@ -22,7 +22,7 @@ export function SiteFooter() {
           ))}
         </div>
         <p className="font-mono text-[11px] uppercase tracking-wide text-text-secondary">
-          Built for the X Layer Hackathon
+          Built for the Nimiq Hackathon
         </p>
       </div>
     </footer>
