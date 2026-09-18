@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+PropChain
+PropChain is a marketplace for tokenizing real-world assets (houses, land,
+phones, gadgets, cars) as NFTs. A seller uploads proof of ownership, an AI
+verification pipeline checks the document before anything can be minted,
+and approved assets can be listed, bought, offered on, or moved through an
+escrow hold on-chain.
 
-## Getting Started
+This app was originally built for an X Layer RWA hackathon and has also
+been migrated to run as a Nimiq Pay Mini App, with contracts
+redeployed to Base (Nimiq Pay's Ethereum provider does not currently
+support X Layer).
 
-First, run the development server:
+Stack
+Next.js 16 / React / TypeScript / Tailwind
+viem — direct calls against the wallet provider Nimiq Pay injects
+(`window.ethereum`, standard EIP-1193), no wagmi/RainbowKit
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+@nimiq/mini-app-sdk for Mini App initialization
+Groq (vision + reasoning models) for AI document verification
+ipfs.ninja for real asset image uploads
+Solidity contracts (AssetNFT, Marketplace, EscrowHold) on Base Sepolia —
+see the separate propchain-contracts repo
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+How it works
+Seller submits an asset with proof-of-ownership documents.
+/api/verify runs a two-stage Groq pipeline: OCR/extraction, then a
+structured pass/fail/warning judgment across four categories (seller
+   info, asset info, document consistency, anomalies). A verdict of
+   review with no failing checks and at least 3 of 4 passing is
+   auto-approved; genuine failures or multiple warnings still require
+   manual follow-up.
 
-## Learn More
+An approved verdict is signed into a verification token bound to the
+seller's wallet address.
 
-To learn more about Next.js, take a look at the following resources:
+/api/mint-listing checks that token before minting an AssetNFT
+token to the seller.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The seller lists the asset on Marketplace, where it can be bought
+outright, offered on, or moved through EscrowHold for a timed
+   inspection window before funds release.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Wallet layer
+The wallet connection code (`src/lib/nimiqWallet.ts`) talks directly to
+whatever EIP-1193 provider is injected — Nimiq Pay's provider in
+production, MetaMask or similar during local development. There's no
+wallet-picker UI: Nimiq Pay already provides exactly one wallet, and
+requesting accounts triggers its own native confirmation dialog.
 
-## Deploy on Vercel
+Known limitations
+EscrowHold.lockFunds() requires the seller to have approved the
+EscrowHold contract specifically, separately from the Marketplace
+  approval — not yet wired into the mint/list flow's UI.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The AI verification pipeline does not include the video-transcript
+matching step originally scoped; only document OCR, consistency
+  reasoning, and an optional basic selfie/document face comparison are
+  implemented. The selfie check is a general vision-model comparison, not
+  a dedicated liveness/anti-spoofing API — see the comment in
+  src/app/api/verify/route.ts for the full caveat.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+useRealListings.ts and useProfileData.ts scan token IDs one by one
+via multicall rather than using a bulk enumeration function or indexer
+ ## Deploy on Vercel : https://propchain-nimiq-sand.vercel.app/
+
+
